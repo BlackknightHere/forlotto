@@ -110,6 +110,18 @@ export function getLimit(event, owner, type, number) {
   return l.default === null || l.default === undefined || l.default === '' ? null : Number(l.default)
 }
 
+/** The per-number limit set for this number (not the "all numbers" default), or null. */
+export function ownLimit(event, owner, type, number) {
+  const o = event?.limits?.[owner]?.[type]?.overrides?.[number]
+  return o === undefined || o === null || o === '' ? null : Number(o)
+}
+
+/** The "all numbers" default limit, or null. */
+export function defaultLimit(event, owner, type) {
+  const d = event?.limits?.[owner]?.[type]?.default
+  return d === undefined || d === null || d === '' ? null : Number(d)
+}
+
 export const entriesOf = (entries, eventId, owner, type) =>
   entries.filter((e) => e.eventId === eventId && e.owner === owner && e.type === type)
 

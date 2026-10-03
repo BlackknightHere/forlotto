@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocateItems, cellState, cleanMoney, getLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
+import { allocateItems, cellState, cleanMoney, defaultLimit, getLimit, ownLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
 
 const makeEvent = (patch = {}) => Object.assign(newEvent({ name: 'test', date: '2026-10-16' }), patch)
 const entry = (p) => ({ id: Math.random().toString(36), eventId: 'E', owner: 'meaw', note: '', createdAt: 0, ...p })
@@ -13,6 +13,16 @@ describe('getLimit', () => {
   it('treats 0 as "accept nothing", not as "no limit"', () => expect(getLimit(ev, 'meaw', 'top', '99')).toBe(0))
   it('ignores an empty override', () => expect(getLimit(ev, 'meaw', 'top', '10')).toBe(500))
   it('returns null (no limit) when nothing is set', () => expect(getLimit(ev, 'jik', 'top', '25')).toBeNull())
+  it('ownLimit reports only per-number limits', () => {
+    expect(ownLimit(ev, 'meaw', 'top', '25')).toBe(150)
+    expect(ownLimit(ev, 'meaw', 'top', '99')).toBe(0)
+    expect(ownLimit(ev, 'meaw', 'top', '00')).toBeNull()
+    expect(ownLimit(ev, 'meaw', 'top', '10')).toBeNull()
+  })
+  it('defaultLimit reads the all-numbers limit', () => {
+    expect(defaultLimit(ev, 'meaw', 'top')).toBe(500)
+    expect(defaultLimit(ev, 'jik', 'top')).toBeNull()
+  })
 })
 
 describe('cleanMoney', () => {

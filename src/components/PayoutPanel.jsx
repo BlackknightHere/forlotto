@@ -42,7 +42,7 @@ export default function PayoutPanel({ data, update, event, owner, type }) {
         </h3>
         <div className="payout-inputs">
           <label className="field">
-            <span>เลขที่ออก (ใช้ร่วมกันทั้งลุงแมวและป้าจิก)</span>
+            <span>เลขที่ออก</span>
             <input
               className="num-input big-input"
               inputMode="numeric"
