@@ -1,0 +1,25 @@
+{
+  "name": "lotto-lung-meaw",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "แอปจดโพยหวยรัฐบาล ลุงแมว / ป้าจิก (ใช้งานในเครื่อง)",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"node --watch server/index.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node server/index.js --open",
+    "serve": "node server/index.js"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans-thai": "^5.3.0",
+    "express": "^4.21.2",
+    "lucide-react": "^1.51.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
+  }
+}
