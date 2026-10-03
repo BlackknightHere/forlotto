@@ -1,7 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import Modal from './Modal.jsx'
-import { OWNERS, TYPES, fmt, uid } from '../lib.js'
+import { OWNERS, TYPES, cleanMoney, fmt, isMoneyOrEmpty, uid } from '../lib.js'
 
 export default function LimitModal({ event, owner, type, update, toast, onClose }) {
   const digits = type === 'three' ? 3 : 2
@@ -26,7 +26,8 @@ export default function LimitModal({ event, owner, type, update, toast, onClose 
   const counts = {}
   filled.forEach((r) => (counts[r.number] = (counts[r.number] || 0) + 1))
   const dupes = Object.keys(counts).filter((n) => counts[n] > 1 && n)
-  const valid = !badNumber.length && !badLimit.length && !dupes.length
+  const badAll = !isMoneyOrEmpty(all)
+  const valid = !badNumber.length && !badLimit.length && !dupes.length && !badAll
 
   function save() {
     if (!valid) return
@@ -64,11 +65,11 @@ export default function LimitModal({ event, owner, type, update, toast, onClose 
         </p>
         <div className="inline">
           <input
-            className="w-160"
+            className={`w-160 ${badAll ? 'invalid' : ''}`}
             inputMode="numeric"
             placeholder="ไม่อั้น"
             value={all}
-            onChange={(e) => setAll(e.target.value.replace(/[^\d.]/g, ''))}
+            onChange={(e) => setAll(cleanMoney(e.target.value))}
           />
           <span>บาท / เลข</span>
           {all !== '' && (
@@ -77,6 +78,7 @@ export default function LimitModal({ event, owner, type, update, toast, onClose 
             </button>
           )}
         </div>
+        {badAll && <p className="error-text">ยอดอั้นต้องเป็นตัวเลข</p>}
       </section>
 
       <section className="limit-section">
@@ -101,7 +103,7 @@ export default function LimitModal({ event, owner, type, update, toast, onClose 
                   inputMode="numeric"
                   placeholder="บาท"
                   value={r.limit}
-                  onChange={(e) => setRow(r.id, { limit: e.target.value.replace(/[^\d.]/g, '') })}
+                  onChange={(e) => setRow(r.id, { limit: cleanMoney(e.target.value) })}
                   onKeyDown={(e) => e.key === 'Enter' && addRow()}
                 />
                 <button className="icon-btn danger" onClick={() => removeRow(r.id)} title="ลบ">

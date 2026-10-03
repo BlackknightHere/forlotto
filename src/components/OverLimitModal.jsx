@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Modal from './Modal.jsx'
-import { OWNERS, fmt } from '../lib.js'
+import { useConfirm } from './Confirm.jsx'
+import { OWNERS, cleanMoney, fmt } from '../lib.js'
 
 /**
  * Asks what to do with an amount that pushes a number past its limit.
@@ -20,6 +21,16 @@ export default function OverLimitModal({ item, used, limit, incoming, typeLabel,
   const none = isThree ? { straight: 0, tod: 0 } : { amount: 0 }
 
   const [keep, setKeep] = useState(fitRemaining)
+  const confirm = useConfirm()
+  const askCancel = async () => {
+    const ok = await confirm({
+      title: 'ยกเลิกโพยทั้งใบ?',
+      message: 'ทุกแถวในโพยใบนี้จะยังไม่ถูกบันทึก (ข้อมูลที่คีย์ไว้ยังอยู่ในฟอร์ม)',
+      confirmText: 'ยกเลิกทั้งใบ',
+      danger: true,
+    })
+    if (ok) onCancel()
+  }
   const keepTotal = isThree ? (keep.straight || 0) + (keep.tod || 0) : keep.amount || 0
   const restTotal = incoming - keepTotal
   const valid = isThree
@@ -27,7 +38,7 @@ export default function OverLimitModal({ item, used, limit, incoming, typeLabel,
     : keep.amount >= 0 && keep.amount <= item.amount
 
   const set = (k) => (e) => {
-    const v = e.target.value.replace(/[^\d.]/g, '')
+    const v = cleanMoney(e.target.value)
     setKeep((p) => ({ ...p, [k]: v === '' ? 0 : Number(v) }))
   }
 
@@ -46,7 +57,7 @@ export default function OverLimitModal({ item, used, limit, incoming, typeLabel,
   return (
     <Modal
       title={`เลข ${item.number} (${typeLabel}) ซื้อเกินยอดอั้นแล้ว`}
-      onClose={onCancel}
+      onClose={askCancel}
       width={520}
       footer={
         <>

@@ -37,17 +37,21 @@ export const emptyLimits = () =>
     OWNER_KEYS.map((o) => [o, Object.fromEntries(TYPE_KEYS.map((t) => [t, { default: null, overrides: {} }]))]),
   )
 
+// Multipliers are kept as the text the user typed ('' = not entered yet) and converted only when calculating.
 export const emptyPayouts = () =>
   Object.fromEntries(
     OWNER_KEYS.map((o) => [
       o,
       {
-        top: { number: '', mult: 0 },
-        bottom: { number: '', mult: 0 },
-        three: { number: '', straightMult: 0, todMult: 0 },
+        top: { mult: '' },
+        bottom: { mult: '' },
+        three: { straightMult: '', todMult: '' },
       },
     ]),
   )
+
+// The government draw is the same for everyone, so winning numbers live on the event, not per owner.
+export const emptyResults = () => ({ top: '', bottom: '', three: '' })
 
 export function newEvent({ name, date, discount, limits }) {
   return {
@@ -59,8 +63,43 @@ export function newEvent({ name, date, discount, limits }) {
     createdAt: Date.now(),
     limits: limits ? structuredClone(limits) : emptyLimits(),
     payouts: emptyPayouts(),
+    results: emptyResults(),
   }
 }
+
+/** Upgrades data saved by older versions. Mutates and returns `data`. */
+export function migrateData(data) {
+  data.events ||= []
+  data.entries ||= []
+  data.settings ||= {}
+  for (const ev of data.events) {
+    ev.payouts ||= emptyPayouts()
+    if (!ev.results) {
+      // v1 stored the winning number per owner; prefer ลุงแมว's, fall back to ป้าจิก's.
+      ev.results = emptyResults()
+      for (const t of TYPE_KEYS) ev.results[t] = ev.payouts.meaw?.[t]?.number || ev.payouts.jik?.[t]?.number || ''
+    }
+    for (const o of OWNER_KEYS) {
+      ev.payouts[o] ||= emptyPayouts()[o]
+      for (const t of TYPE_KEYS) {
+        const p = (ev.payouts[o][t] ||= {})
+        delete p.number
+        for (const k of ['mult', 'straightMult', 'todMult']) if (p[k] === 0) p[k] = ''
+      }
+    }
+  }
+  return data
+}
+
+/** Keeps digits and a single decimal point, e.g. '1.2.3' -> '1.23'. */
+export function cleanMoney(value) {
+  const s = String(value ?? '').replace(/[^\d.]/g, '')
+  const i = s.indexOf('.')
+  return i === -1 ? s : s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, '')
+}
+
+/** '' or a valid non-negative number. */
+export const isMoneyOrEmpty = (v) => v === '' || v === null || v === undefined || (Number.isFinite(Number(v)) && Number(v) >= 0)
 
 /** null = ไม่อั้น */
 export function getLimit(event, owner, type, number) {
@@ -103,41 +142,101 @@ export function sumThree(list) {
   return { straight, tod }
 }
 
+const subtractAmounts = (it, keep) =>
+  it.type === 'three'
+    ? { ...it, straight: (it.straight || 0) - (keep.straight || 0), tod: (it.tod || 0) - (keep.tod || 0) }
+    : { ...it, amount: (it.amount || 0) - (keep.amount || 0) }
+
+/**
+ * Checks each incoming item against its owner's limit. When over, asks `decide({ item, used, limit, incoming })`,
+ * which resolves to { keep } or null (cancel the whole ticket). Whatever ลุงแมว doesn't keep is cut to ป้าจิก
+ * (and checked against ป้าจิก's limit too); whatever ป้าจิก doesn't keep is refused.
+ */
+export async function allocateItems(items, { entries, event, decide }) {
+  const created = []
+  let rejected = 0
+  const queue = items.map((it) => ({ ...it, cutFrom: it.cutFrom ?? null }))
+
+  while (queue.length) {
+    const it = queue.shift()
+    const sameNumber = (c) => c.owner === it.owner && c.type === it.type && c.number === it.number
+    const used = usedAmount(entries, event.id, it.owner, it.type, it.number) + created.filter(sameNumber).reduce((s, c) => s + entryTotal(c), 0)
+    const limit = getLimit(event, it.owner, it.type, it.number)
+    const incoming = entryTotal(it)
+    let keep = it
+
+    if (limit !== null && used + incoming > limit) {
+      const decision = await decide({ item: it, used, limit, incoming })
+      if (!decision) return { cancelled: true, created: [], rejected: 0 }
+      keep = { ...it, ...decision.keep }
+      const rest = subtractAmounts(it, decision.keep)
+      if (entryTotal(rest) > 0) {
+        if (it.owner === 'meaw') queue.push({ ...rest, owner: 'jik', cutFrom: 'meaw' })
+        else rejected += entryTotal(rest)
+      }
+    }
+    if (entryTotal(keep) > 0) created.push(keep)
+  }
+  return { cancelled: false, created, rejected }
+}
+
+const num = (v) => Number(v) || 0
+
+/** One row per winning part of an entry (a 3 ตัว entry can win both ตรง and โต๊ด). */
+export function winningEntries(event, entries, owner, types = TYPE_KEYS) {
+  const rows = []
+  for (const type of types) {
+    const win = event.results?.[type] || ''
+    const p = event.payouts?.[owner]?.[type] || {}
+    const list = entriesOf(entries, event.id, owner, type)
+    if (type === 'three') {
+      if (!/^\d{3}$/.test(win)) continue
+      const key = sortDigits(win)
+      for (const e of list) {
+        if (e.number === win && (e.straight || 0) > 0) {
+          rows.push({ entry: e, type, kind: 'straight', label: '3 ตัวตรง', bought: e.straight, mult: num(p.straightMult), pay: e.straight * num(p.straightMult) })
+        }
+        if ((e.tod || 0) > 0 && sortDigits(e.number) === key) {
+          rows.push({ entry: e, type, kind: 'tod', label: '3 ตัวโต๊ด', bought: e.tod, mult: num(p.todMult), pay: e.tod * num(p.todMult) })
+        }
+      }
+    } else {
+      if (!/^\d{2}$/.test(win)) continue
+      for (const e of list) {
+        if (e.number === win) rows.push({ entry: e, type, kind: 'two', label: TYPES[type], bought: e.amount || 0, mult: num(p.mult), pay: (e.amount || 0) * num(p.mult) })
+      }
+    }
+  }
+  return rows
+}
+
 /** Sales + payout summary for one owner/type tab. */
 export function tabSummary(event, entries, owner, type) {
   const list = entriesOf(entries, event.id, owner, type)
   const sales = list.reduce((s, e) => s + entryTotal(e), 0)
-  const discountPct = Number(event.discount?.[owner] ?? DEFAULT_DISCOUNT) || 0
+  const discountPct = num(event.discount?.[owner] ?? DEFAULT_DISCOUNT)
   const discount = (sales * discountPct) / 100
-  const p = event.payouts?.[owner]?.[type] || {}
-  let payout = 0
+  const wins = winningEntries(event, entries, owner, [type])
+  const payout = wins.reduce((s, w) => s + w.pay, 0)
+  const win = event.results?.[type] || ''
   let detail = null
 
-  if (type === 'three') {
-    const win = p.number || ''
-    if (/^\d{3}$/.test(win)) {
-      const straightBought = list.filter((e) => e.number === win).reduce((s, e) => s + (e.straight || 0), 0)
-      const key = sortDigits(win)
-      const todList = list.filter((e) => (e.tod || 0) > 0 && sortDigits(e.number) === key)
-      const todBought = todList.reduce((s, e) => s + (e.tod || 0), 0)
-      const straightPay = straightBought * (Number(p.straightMult) || 0)
-      const todPay = todBought * (Number(p.todMult) || 0)
-      payout = straightPay + todPay
-      const todNumbers = [...new Set(todList.map((e) => e.number))].sort()
-      detail = { straightBought, todBought, straightPay, todPay, todNumbers }
+  if (type === 'three' && /^\d{3}$/.test(win)) {
+    const part = (kind) => wins.filter((w) => w.kind === kind)
+    const sum = (rows, k) => rows.reduce((s, w) => s + w[k], 0)
+    detail = {
+      straightBought: sum(part('straight'), 'bought'),
+      todBought: sum(part('tod'), 'bought'),
+      straightPay: sum(part('straight'), 'pay'),
+      todPay: sum(part('tod'), 'pay'),
+      todNumbers: [...new Set(part('tod').map((w) => w.entry.number))].sort(),
     }
-  } else {
-    const win = p.number || ''
-    if (/^\d{2}$/.test(win)) {
-      const bought = list.filter((e) => e.number === win).reduce((s, e) => s + (e.amount || 0), 0)
-      payout = bought * (Number(p.mult) || 0)
-      detail = { bought }
-    }
+  } else if (type !== 'three' && /^\d{2}$/.test(win)) {
+    detail = { bought: wins.reduce((s, w) => s + w.bought, 0) }
   }
 
   return { sales, discountPct, discount, net: sales - discount, payout, profit: sales - discount - payout, detail }
 }
-
 export function eventTotals(event, entries) {
   const list = entries.filter((e) => e.eventId === event.id)
   const byOwner = {}

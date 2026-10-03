@@ -11,7 +11,8 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups')
 const DB_FILE = path.join(DATA_DIR, 'db.json')
 const DIST_DIR = path.join(ROOT, 'dist')
 const PORT = Number(process.env.LOTTO_PORT) || 5178
-const KEEP_BACKUPS = 30
+const KEEP_BACKUPS = 60
+const BACKUP_EVERY_HOURS = 3
 
 fs.mkdirSync(BACKUP_DIR, { recursive: true })
 
@@ -29,10 +30,15 @@ function load() {
   }
 }
 
-function backupToday() {
+const pad2 = (n) => String(n).padStart(2, '0')
+
+// One backup per BACKUP_EVERY_HOURS window, named by local (Thai) time, e.g. db-2026-10-03_12.json
+function backupSlot() {
   if (!fs.existsSync(DB_FILE)) return
-  const day = new Date().toISOString().slice(0, 10)
-  const target = path.join(BACKUP_DIR, `db-${day}.json`)
+  const d = new Date()
+  const slot = Math.floor(d.getHours() / BACKUP_EVERY_HOURS) * BACKUP_EVERY_HOURS
+  const name = `db-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}_${pad2(slot)}.json`
+  const target = path.join(BACKUP_DIR, name)
   if (fs.existsSync(target)) return
   fs.copyFileSync(DB_FILE, target)
   const old = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith('db-')).sort()
@@ -42,7 +48,7 @@ function backupToday() {
 }
 
 function save(state) {
-  backupToday()
+  backupSlot()
   const tmp = DB_FILE + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(state))
   try {
@@ -64,13 +70,14 @@ app.put('/api/db', (req, res) => {
   const { version, data } = req.body ?? {}
   if (!data || typeof data !== 'object') return res.status(400).json({ error: 'invalid data' })
   if (version !== state.version) return res.status(409).json(state)
-  state = { version: state.version + 1, data }
+  const next = { version: state.version + 1, data }
   try {
-    save(state)
+    save(next)
   } catch (err) {
     console.error('บันทึกข้อมูลไม่สำเร็จ', err)
     return res.status(500).json({ error: String(err) })
   }
+  state = next
   res.json({ version: state.version })
 })
 
@@ -79,13 +86,24 @@ if (fs.existsSync(DIST_DIR)) {
   app.get('*', (_req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')))
 }
 
-app.listen(PORT, '127.0.0.1', () => {
-  const url = `http://localhost:${PORT}`
+const url = `http://localhost:${PORT}`
+const openBrowser = () => {
+  const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open ${url}` : `xdg-open ${url}`
+  exec(cmd)
+}
+
+const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  หวยลุงแมว พร้อมใช้งานที่ ${url}`)
   console.log(`  ข้อมูลเก็บอยู่ที่ ${DB_FILE}`)
   console.log('  (ปิดหน้าต่างนี้ = ปิดโปรแกรม)\n')
-  if (process.argv.includes('--open')) {
-    const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open ${url}` : `xdg-open ${url}`
-    exec(cmd)
-  }
+  if (process.argv.includes('--open')) openBrowser()
+})
+
+server.on('error', (err) => {
+  if (err.code !== 'EADDRINUSE') throw err
+  // Already running (e.g. 2-open-app.bat double-clicked twice): just show the existing app.
+  console.log(`\n  โปรแกรมเปิดอยู่แล้ว กำลังเปิดหน้าเดิมให้ที่ ${url}`)
+  console.log('  หน้าต่างนี้จะปิดเองใน 5 วินาที\n')
+  if (process.argv.includes('--open')) openBrowser()
+  setTimeout(() => process.exit(0), 5000)
 })

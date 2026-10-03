@@ -1,17 +1,20 @@
 import { useRef, useState } from 'react'
-import { OWNERS, TYPES, entryTotal, fmt, getLimit, toNum, uid, usedAmount } from '../lib.js'
+import { OWNERS, TYPES, allocateItems, cleanMoney, entryTotal, fmt, toNum, uid } from '../lib.js'
 import OverLimitModal from '../components/OverLimitModal.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
-import { Check, Eraser, History, Plus, Receipt, Trash2, X } from 'lucide-react'
+import { ArchiveRestore, Check, Eraser, History, Plus, Receipt, Trash2, X } from 'lucide-react'
 
 const DEFAULT_ROWS = 5
 const blankRow = (owner = 'meaw') => ({ id: uid(), number: '', amount: '', pos: 'top', straight: '', tod: '', note: '', owner })
 const blankRows = () => Array.from({ length: DEFAULT_ROWS }, () => blankRow())
+const isBlank = (r) => !r.number && !r.amount && !r.straight && !r.tod && !r.note.trim()
 
 export default function BuyPage({ data, update, event, toast }) {
   const [rows, setRows] = useState(blankRows)
   const [errors, setErrors] = useState({})
   const [overLimit, setOverLimit] = useState(null) // { info, resolve }
+  const [busy, setBusy] = useState(false)
+  const submitting = useRef(false) // a ref, so a double click within the same tick is still blocked
   const formRef = useRef(null)
 
   const setRow = (id, patch) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
@@ -20,16 +23,28 @@ export default function BuyPage({ data, update, event, toast }) {
   const addRows = (n = 1) => setRows((rs) => [...rs, ...Array.from({ length: n }, () => blankRow(rs.at(-1)?.owner))])
 
   // Enter jumps to the next input, so a whole ticket can be keyed without the mouse.
-  // Ctrl+Enter saves the ticket.
+  // Ctrl+Enter saves the ticket. ↑ / ↓ in a 2-digit row picks บน / ล่าง.
   const ROW_FIELDS = '.ticket-row input:not([disabled]), .ticket-row select:not([disabled])'
   const onKeyDown = (e) => {
+    const rowId = e.target.closest?.('.ticket-row')?.dataset.row
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && rowId && e.target.dataset.posKeys) {
+      const row = rows.find((r) => r.id === rowId)
+      if (row?.number.length === 2) {
+        e.preventDefault()
+        setRow(rowId, { pos: e.key === 'ArrowUp' ? 'top' : 'bottom' })
+      }
+      return
+    }
     if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return
     e.preventDefault()
     if (e.ctrlKey) return submit()
     const fields = [...formRef.current.querySelectorAll(ROW_FIELDS)]
     const i = fields.indexOf(e.target)
     if (i === -1) return
-    if (i === fields.length - 1) addRows(1)
+    if (i === fields.length - 1) {
+      if (!rows.at(-1)?.number) return
+      addRows(1)
+    }
     setTimeout(() => {
       const next = formRef.current.querySelectorAll(ROW_FIELDS)[i + 1]
       next?.focus()
@@ -41,7 +56,10 @@ export default function BuyPage({ data, update, event, toast }) {
     const errs = {}
     const items = []
     for (const r of rows) {
-      if (!r.number) continue
+      if (!r.number) {
+        if (!isBlank(r)) errs[r.id] = 'ยังไม่ได้ใส่เลข'
+        continue
+      }
       if (!/^\d{2,3}$/.test(r.number)) {
         errs[r.id] = 'ใส่เลข 2 หรือ 3 หลัก'
         continue
@@ -60,53 +78,46 @@ export default function BuyPage({ data, update, event, toast }) {
     return { errs, items }
   }
 
-  const ask = (info) => new Promise((resolve) => setOverLimit({ info, resolve }))
+  const decide = (info) =>
+    new Promise((resolve) =>
+      setOverLimit({
+        info,
+        resolve: (v) => {
+          setOverLimit(null)
+          resolve(v)
+        },
+      }),
+    )
 
   async function submit() {
-    const { errs, items } = validate()
-    setErrors(errs)
-    if (Object.keys(errs).length) return toast('มีช่องที่กรอกไม่ถูกต้อง', 'err')
-    if (!items.length) return toast('ยังไม่ได้กรอกเลข', 'err')
+    if (submitting.current || event.archived) return
+    submitting.current = true
+    setBusy(true)
+    try {
+      const { errs, items } = validate()
+      setErrors(errs)
+      if (Object.keys(errs).length) return toast('มีช่องที่กรอกไม่ถูกต้อง', 'err')
+      if (!items.length) return toast('ยังไม่ได้กรอกเลข', 'err')
 
-    const now = Date.now()
-    const batchId = uid()
-    const created = []
-    let rejected = 0
-    // Items are processed one by one; amounts cut from ลุงแมว are queued again for ป้าจิก's limit check.
-    const queue = items.map((it) => ({ ...it, cutFrom: null }))
+      const result = await allocateItems(items, { entries: data.entries, event, decide })
+      if (result.cancelled) return toast('ยกเลิกการบันทึก — ยังไม่มีอะไรถูกบันทึก', 'err')
 
-    while (queue.length) {
-      const it = queue.shift()
-      const used =
-        usedAmount(data.entries, event.id, it.owner, it.type, it.number) +
-        created.filter((c) => c.owner === it.owner && c.type === it.type && c.number === it.number).reduce((s, c) => s + total3(c), 0)
-      const limit = getLimit(event, it.owner, it.type, it.number)
-      const incoming = total3(it)
-      let keep = it
-
-      if (limit !== null && used + incoming > limit) {
-        const decision = await ask({ item: it, used, limit, incoming })
-        setOverLimit(null)
-        if (!decision) return toast('ยกเลิกการบันทึก — ยังไม่มีอะไรถูกบันทึก', 'err')
-        keep = { ...it, ...decision.keep }
-        const rest = subtract(it, decision.keep)
-        if (total3(rest) > 0) {
-          if (it.owner === 'meaw') queue.push({ ...rest, owner: 'jik', cutFrom: 'meaw' })
-          else rejected += total3(rest)
-        }
-      }
-      if (total3(keep) > 0) created.push(makeEntry(keep, event.id, batchId, now))
+      const now = Date.now()
+      const batchId = uid()
+      const created = result.created.map((it) => makeEntry(it, event.id, batchId, now))
+      update((d) => void d.entries.push(...created))
+      const sent = created.filter((c) => c.cutFrom).reduce((s, c) => s + entryTotal(c), 0)
+      let msg = `บันทึกแล้ว ${created.length} รายการ`
+      if (sent) msg += ` · ตัดส่งป้าจิก ${fmt(sent)} บาท`
+      if (result.rejected) msg += ` · ไม่รับ ${fmt(result.rejected)} บาท`
+      toast(msg)
+      setRows(blankRows())
+      setErrors({})
+      setTimeout(() => formRef.current?.querySelector('input')?.focus(), 0)
+    } finally {
+      submitting.current = false
+      setBusy(false)
     }
-
-    update((d) => void d.entries.push(...created))
-    const sent = created.filter((c) => c.cutFrom).reduce((s, c) => s + total3(c), 0)
-    let msg = `บันทึกแล้ว ${created.length} รายการ`
-    if (sent) msg += ` · ตัดส่งป้าจิก ${fmt(sent)} บาท`
-    if (rejected) msg += ` · ไม่รับ ${fmt(rejected)} บาท`
-    toast(msg)
-    setRows(blankRows())
-    setErrors({})
-    setTimeout(() => formRef.current?.querySelector('input')?.focus(), 0)
   }
 
   const filled = rows.filter((r) => r.number).length
@@ -125,8 +136,24 @@ export default function BuyPage({ data, update, event, toast }) {
           <span>
             <kbd>Ctrl</kbd>+<kbd>Enter</kbd> ยืนยัน
           </span>
+          <span>
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> บน / ล่าง
+          </span>
         </div>
       </div>
+
+      {event.archived && (
+        <div className="archived-bar">
+          <ArchiveRestore size={20} />
+          <div>
+            <b>งวดนี้จัดเก็บแล้ว</b> — ดูข้อมูลได้ แต่บันทึกโพยใหม่ไม่ได้
+          </div>
+          <button className="btn sm" onClick={() => update((d) => void (d.events.find((e) => e.id === event.id).archived = false))}>
+            นำกลับมาใช้งาน
+          </button>
+        </div>
+      )}
 
       <div className="card ticket" ref={formRef} onKeyDown={onKeyDown}>
         <div className="card-head">
@@ -153,13 +180,14 @@ export default function BuyPage({ data, update, event, toast }) {
         {rows.map((r, i) => {
           const len = r.number.length
           return (
-            <div key={r.id} className={`ticket-grid ticket-row ${errors[r.id] ? 'has-error' : ''} ${len ? 'filled' : ''}`}>
+            <div key={r.id} data-row={r.id} className={`ticket-grid ticket-row ${errors[r.id] ? 'has-error' : ''} ${len ? 'filled' : ''}`}>
               <span className="row-no">{i + 1}</span>
               <input
                 className="num-input"
                 inputMode="numeric"
                 maxLength={3}
                 placeholder="00"
+                data-pos-keys="1"
                 value={r.number}
                 onChange={(e) => setRow(r.id, { number: e.target.value.replace(/\D/g, '') })}
               />
@@ -177,6 +205,7 @@ export default function BuyPage({ data, update, event, toast }) {
               ) : (
                 <input
                   inputMode="decimal"
+                  data-pos-keys="1"
                   placeholder={len === 2 ? '0' : 'ใส่เลขก่อน'}
                   disabled={len !== 2}
                   value={r.amount}
@@ -230,7 +259,7 @@ export default function BuyPage({ data, update, event, toast }) {
           >
             <Eraser size={16} /> ล้างโพย
           </button>
-          <button className="btn primary lg" onClick={submit}>
+          <button className="btn primary lg" onClick={submit} disabled={busy || event.archived}>
             <Check size={19} /> ยืนยันบันทึก
           </button>
         </div>
@@ -318,14 +347,7 @@ function RecentEntries({ data, event, update, toast }) {
   )
 }
 
-const money = (e) => e.target.value.replace(/[^\d.]/g, '')
-const total3 = (it) => (it.type === 'three' ? (it.straight || 0) + (it.tod || 0) : it.amount || 0)
-
-function subtract(it, keep) {
-  return it.type === 'three'
-    ? { ...it, straight: (it.straight || 0) - (keep.straight || 0), tod: (it.tod || 0) - (keep.tod || 0) }
-    : { ...it, amount: (it.amount || 0) - (keep.amount || 0) }
-}
+const money = (e) => cleanMoney(e.target.value)
 
 function makeEntry(it, eventId, batchId, now) {
   const base = { id: uid(), eventId, batchId, owner: it.owner, type: it.type, number: it.number, note: it.note, cutFrom: it.cutFrom, createdAt: now }

@@ -2,7 +2,7 @@ import { Archive, ArchiveRestore, CalendarPlus, Pencil, Search, Trash2 } from 'l
 import { useEffect, useState } from 'react'
 import Modal from '../components/Modal.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
-import { DEFAULT_DISCOUNT, OWNERS, eventTotals, fmt, fmtDate, newEvent, todayIso } from '../lib.js'
+import { cleanMoney, DEFAULT_DISCOUNT, OWNERS, eventTotals, fmt, fmtDate, newEvent, todayIso } from '../lib.js'
 
 export default function EventsPage({ data, update, event, toast, setCurrentEvent, goBuy, startCreate, onCreateOpened }) {
   const [search, setSearch] = useState('')
@@ -173,7 +173,7 @@ export default function EventsPage({ data, update, event, toast, setCurrentEvent
               <button className="btn ghost" onClick={() => setForm(null)}>
                 ยกเลิก
               </button>
-              <button className="btn primary" disabled={!form.date} onClick={submit}>
+              <button className="btn primary" disabled={!form.date || badPct(form.meaw) || badPct(form.jik)} onClick={submit}>
                 {form.mode === 'create' ? 'สร้าง' : 'บันทึก'}
               </button>
             </>
@@ -197,12 +197,13 @@ export default function EventsPage({ data, update, event, toast, setCurrentEvent
             </label>
             <label className="field">
               <span>ส่วนลด ลุงแมว (%)</span>
-              <input inputMode="decimal" value={form.meaw} onChange={(e) => setForm((f) => ({ ...f, meaw: e.target.value.replace(/[^\d.]/g, '') }))} />
+              <input inputMode="decimal" value={form.meaw} onChange={(e) => setForm((f) => ({ ...f, meaw: cleanMoney(e.target.value) }))} className={badPct(form.meaw) ? 'invalid' : ''} />
             </label>
             <label className="field">
               <span>ส่วนลด ป้าจิก (%)</span>
-              <input inputMode="decimal" value={form.jik} onChange={(e) => setForm((f) => ({ ...f, jik: e.target.value.replace(/[^\d.]/g, '') }))} />
+              <input inputMode="decimal" value={form.jik} onChange={(e) => setForm((f) => ({ ...f, jik: cleanMoney(e.target.value) }))} className={badPct(form.jik) ? 'invalid' : ''} />
             </label>
+            {(badPct(form.meaw) || badPct(form.jik)) && <p className="error-text span-2">ส่วนลดต้องเป็นตัวเลข 0–100 %</p>}
             {form.mode === 'create' && (
               <label className="field span-2">
                 <span>คัดลอกยอดอั้นจากงวดก่อน</span>
@@ -224,3 +225,6 @@ export default function EventsPage({ data, update, event, toast, setCurrentEvent
     </div>
   )
 }
+
+// Discount must be filled in and between 0 and 100 %
+const badPct = (v) => v === '' || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > 100

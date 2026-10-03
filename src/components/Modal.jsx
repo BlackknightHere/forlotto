@@ -1,16 +1,17 @@
 import { X } from 'lucide-react'
 import { useEffect } from 'react'
 
-export default function Modal({ title, onClose, children, footer, width = 560, dismissable = true }) {
+// onDismiss (Esc / click outside) defaults to onClose; pass it to intercept, e.g. to cancel an edit or ask first.
+export default function Modal({ title, onClose, onDismiss = onClose, children, footer, width = 560, dismissable = true }) {
   useEffect(() => {
     if (!dismissable) return
-    const onKey = (e) => e.key === 'Escape' && onClose?.()
+    const onKey = (e) => e.key === 'Escape' && onDismiss?.()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, dismissable])
+  }, [onDismiss, dismissable])
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => dismissable && e.target === e.currentTarget && onClose?.()}>
+    <div className="modal-backdrop" onMouseDown={(e) => dismissable && e.target === e.currentTarget && onDismiss?.()}>
       <div className="modal" style={{ maxWidth: width }} role="dialog" aria-modal="true">
         <div className="modal-head">
           <h2>{title}</h2>

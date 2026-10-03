@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { CalendarDays, CalendarPlus, Cat, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw } from 'lucide-react'
+import { AppWindow, CalendarDays, CalendarPlus, Cat, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useDb } from './store.js'
 import { fmtDate } from './lib.js'
 import BuyPage from './pages/BuyPage.jsx'
@@ -17,11 +17,12 @@ const STATUS = {
   saving: { text: 'กำลังบันทึก…', icon: Loader },
   saved: { text: 'บันทึกอัตโนมัติแล้ว', icon: CircleCheck },
   error: { text: 'บันทึกไม่สำเร็จ', icon: CloudOff },
-  conflict: { text: 'ข้อมูลถูกแก้จากหน้าต่างอื่น', icon: RefreshCw },
+  conflict: { text: 'บันทึกไม่ได้', icon: RefreshCw },
+  locked: { text: 'เปิดอยู่ในหน้าต่างอื่น', icon: AppWindow },
 }
 
 export default function App() {
-  const { data, status, update } = useDb()
+  const { data, status, update, reload } = useDb()
   const [page, setPage] = useState('buy')
   const [boardOwner, setBoardOwner] = useState('meaw')
   const [startCreate, setStartCreate] = useState(false)
@@ -101,15 +102,19 @@ export default function App() {
         <div className={`side-status s-${status}`}>
           <St.icon size={14} className={status === 'saving' ? 'spin' : ''} />
           <span>{St.text}</span>
-          {status === 'conflict' && (
-            <button className="link-btn" onClick={() => location.reload()}>
-              โหลดใหม่
-            </button>
-          )}
         </div>
       </aside>
 
       <main className="main">
+        {status === 'error' && (
+          <div className="alert-bar">
+            <TriangleAlert size={20} />
+            <div>
+              <b>บันทึกข้อมูลไม่สำเร็จ — ระบบกำลังลองใหม่อัตโนมัติ</b>
+              <span>อย่าเพิ่งปิดโปรแกรม และตรวจว่าหน้าต่างสีดำ (2-open-app) ยังเปิดอยู่</span>
+            </div>
+          </div>
+        )}
         {page === 'events' ? (
           <EventsPage
             {...ctx}
@@ -136,6 +141,26 @@ export default function App() {
         )}
       </main>
 
+      {status === 'locked' && (
+        <BlockingNotice
+          icon={AppWindow}
+          title="แอปถูกเปิดอยู่ในหน้าต่างอื่น"
+          message="เพื่อไม่ให้ข้อมูลหายหรือซ้ำ ใช้งานได้ทีละหน้าต่างเท่านั้น ข้อมูลในหน้านี้บันทึกไว้เรียบร้อยแล้ว กรุณาใช้หน้าต่างที่เปิดล่าสุด"
+          action="ใช้งานหน้านี้แทน"
+          onAction={reload}
+        />
+      )}
+      {status === 'conflict' && (
+        <BlockingNotice
+          danger
+          icon={TriangleAlert}
+          title="บันทึกรายการล่าสุดไม่ได้"
+          message="ข้อมูลถูกแก้ไขจากหน้าต่างอื่น รายการที่เพิ่งคีย์ในหน้านี้ (หลังจากบันทึกครั้งล่าสุด) ยังไม่ถูกบันทึก กดปุ่มด้านล่างเพื่อโหลดข้อมูลล่าสุด แล้วตรวจดูในรายการล่าสุดว่าต้องคีย์อะไรใหม่บ้าง"
+          action="โหลดข้อมูลล่าสุด"
+          onAction={reload}
+        />
+      )}
+
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast t-${t.kind}`}>
@@ -154,6 +179,23 @@ export default function App() {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function BlockingNotice({ icon: Icon, title, message, action, onAction, danger }) {
+  return (
+    <div className="modal-backdrop confirm-backdrop blocking">
+      <div className="confirm" role="alertdialog" aria-modal="true">
+        <div className={`confirm-icon ${danger ? 'danger' : ''}`}>
+          <Icon size={28} />
+        </div>
+        <h2>{title}</h2>
+        <p className="confirm-msg">{message}</p>
+        <button className={`btn lg block ${danger ? 'danger-solid' : 'primary'}`} style={{ marginTop: 22 }} onClick={onAction}>
+          {action}
+        </button>
       </div>
     </div>
   )

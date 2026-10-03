@@ -2,7 +2,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import Modal from './Modal.jsx'
 import { useConfirm } from './Confirm.jsx'
-import { OWNERS, TYPES, entryTotal, fmt, fmtTime, getLimit, sumThree, toNum } from '../lib.js'
+import { OWNERS, TYPES, cleanMoney, entryTotal, fmt, fmtTime, getLimit, sumThree, toNum } from '../lib.js'
 
 export default function NumberModal({ number, type, owner, event, entries, update, toast, onClose }) {
   const [editing, setEditing] = useState(null) // { id, amount, straight, tod, note }
@@ -39,10 +39,15 @@ export default function NumberModal({ number, type, owner, event, entries, updat
     toast(`ลบเลข ${number} ยอด ${fmt(entryTotal(e))} แล้ว`, 'ok', { label: 'เลิกทำ', run: () => update((d) => void d.entries.push(e)) })
   }
 
-  const money = (k) => (ev) => setEditing((p) => ({ ...p, [k]: ev.target.value.replace(/[^\d.]/g, '') }))
+  const money = (k) => (ev) => setEditing((p) => ({ ...p, [k]: cleanMoney(ev.target.value) }))
 
   return (
-    <Modal title={`เลข ${number} · ${TYPES[type]} · ${OWNERS[owner]}`} onClose={onClose} width={720}>
+    <Modal
+      title={`เลข ${number} · ${TYPES[type]} · ${OWNERS[owner]}`}
+      onClose={onClose}
+      onDismiss={editing ? () => setEditing(null) : onClose}
+      width={720}
+    >
       <div className="number-summary">
         <div>
           <div className="muted">ยอดรวม</div>
