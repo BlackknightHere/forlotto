@@ -121,6 +121,18 @@ export function usedAmount(entries, eventId, owner, type, number) {
   return sum
 }
 
+export const NEAR_RATIO = 0.8
+
+/** State of one number in the grid: empty | closed (limit 0, nothing bought) | bought | near | full | over */
+export function cellState(total, limit) {
+  if (limit === 0 && !total) return 'closed'
+  if (!total) return 'empty'
+  if (limit === null || limit === undefined) return 'bought'
+  if (Math.abs(total - limit) < 1e-9) return 'full'
+  if (total > limit) return 'over'
+  return total >= limit * NEAR_RATIO ? 'near' : 'bought'
+}
+
 /** Group a list of entries by number: { '25': [e, e], ... } */
 export function groupByNumber(list) {
   const map = {}

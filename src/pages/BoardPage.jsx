@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Coins, Hash, PenLine, Search, Settings2, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
-import { TYPES, TYPE_KEYS, breakdown, entriesOf, entryTotal, fmt, getLimit, groupByNumber, numbersFor, tabSummary } from '../lib.js'
+import { TYPES, TYPE_KEYS, breakdown, entriesOf, entryTotal, fmt, cellState, getLimit, groupByNumber, numbersFor, tabSummary } from '../lib.js'
 import LimitModal from '../components/LimitModal.jsx'
 import NumberModal from '../components/NumberModal.jsx'
 import PayoutPanel from '../components/PayoutPanel.jsx'
@@ -119,6 +119,10 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
               ใกล้เต็ม 80%
             </span>
             <span>
+              <i className="l-full" />
+              เต็มพอดี
+            </span>
+            <span>
               <i className="l-over" />
               เกินอั้น
             </span>
@@ -131,7 +135,14 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
         style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(numbers.length / GRID_COLUMNS))}, auto)` }}
       >
         {numbers.map((n) => (
-          <Cell key={n} number={n} entries={groups[n]} limit={getLimit(event, owner, type, n)} onClick={() => setOpenNumber(n)} />
+          <Cell
+            key={n}
+            number={n}
+            entries={groups[n]}
+            limit={getLimit(event, owner, type, n)}
+            found={search.length === (type === 'three' ? 3 : 2) && n === search}
+            onClick={() => setOpenNumber(n)}
+          />
         ))}
         {!numbers.length && <div className="muted empty-grid">ไม่พบเลข</div>}
       </div>
@@ -157,31 +168,38 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
   )
 }
 
-// Normal: [25 ......... 90] / 20+20+50 = 90
-// Over limit: [25 ... อั้น 150] / 100+20+100 = 220  (the limit takes the total's place, the total moves under the sum)
-function Cell({ number, entries, limit, onClick }) {
+// One number in the grid. State (see cellState) is shown by a thin bar on the left; only "over" tints the cell.
+//   bought: [25 ...... 90]       / 20+20+50 = 90
+//   near:   [26 ..... 420]       / เหลือ 80 · อั้น 500
+//   full:   [27 ..... 500]       / เต็มพอดี
+//   over:   [28 ... อั้น 500]   / 400+300 = 700
+//   closed: [29 ...... ปิดรับ]
+function Cell({ number, entries, limit, found, onClick }) {
   const list = entries || []
   const total = list.reduce((s, e) => s + entryTotal(e), 0)
-  const ratio = limit ? total / limit : 0
-  const state = limit === null || !total ? '' : total > limit ? 'over' : ratio >= 0.8 ? 'near' : ''
+  const state = cellState(total, limit)
   const tip = [sumTip(list, total), limit !== null ? `อั้น ${fmt(limit)}` : ''].filter(Boolean).join(' · ')
-  const over = state === 'over'
   const sum = list.length ? breakdown(list) : ''
 
+  let corner = total > 0 ? fmt(total) : null
+  let line = sum ? (
+    <>
+      <span className="cell-sum">{sum}</span>
+      <b className="cell-eq">= {fmt(total)}</b>
+    </>
+  ) : null
+  if (state === 'over') corner = `อั้น ${fmt(limit)}`
+  if (state === 'near') line = <span className="cell-sum">เหลือ {fmt(limit - total)} · อั้น {fmt(limit)}</span>
+  if (state === 'full') line = <span className="cell-sum">เต็มพอดี</span>
+  if (state === 'closed') corner = 'ปิดรับ'
+
   return (
-    <button className={`cell ${total ? 'has' : 'empty'} ${state}`} onClick={onClick} title={tip}>
+    <button className={`cell s-${state} ${found ? 'found' : ''}`} onClick={onClick} title={tip}>
       <div className="cell-top">
         <span className="cell-num">{number}</span>
-        {over ? (
-          <span className="cell-total">อั้น {fmt(limit)}</span>
-        ) : (
-          total > 0 && <span className="cell-total">{fmt(total)}</span>
-        )}
+        {corner && <span className="cell-total">{corner}</span>}
       </div>
-      <div className="cell-break">
-        <span className="cell-sum">{sum || ' '}</span>
-        {total > 0 && <b className="cell-eq">= {fmt(total)}</b>}
-      </div>
+      {line && <div className="cell-break">{line}</div>}
     </button>
   )
 }

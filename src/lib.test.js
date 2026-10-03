@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocateItems, cleanMoney, getLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
+import { allocateItems, cellState, cleanMoney, getLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
 
 const makeEvent = (patch = {}) => Object.assign(newEvent({ name: 'test', date: '2026-10-16' }), patch)
 const entry = (p) => ({ id: Math.random().toString(36), eventId: 'E', owner: 'meaw', note: '', createdAt: 0, ...p })
@@ -157,5 +157,23 @@ describe('migrateData', () => {
     ev.results.top = '11'
     const data = migrateData({ events: [ev], entries: [], settings: {} })
     expect(data.events[0].results.top).toBe('11')
+  })
+})
+
+describe('cellState', () => {
+  it.each([
+    [0, null, 'empty'],
+    [0, 500, 'empty'],
+    [0, 0, 'closed'],
+    [50, 0, 'over'],
+    [90, null, 'bought'],
+    [399, 500, 'bought'],
+    [400, 500, 'near'],
+    [499.5, 500, 'near'],
+    [500, 500, 'full'],
+    [500.5, 500, 'over'],
+    [700, 500, 'over'],
+  ])('total %s with limit %s is %s', (total, limit, expected) => {
+    expect(cellState(total, limit)).toBe(expected)
   })
 })

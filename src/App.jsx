@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppWindow, CalendarDays, CalendarPlus, Cat, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
+import { AppWindow, CalendarDays, CalendarPlus, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useDb } from './store.js'
+import Logo from './components/Logo.jsx'
 import { fmtDate } from './lib.js'
 import BuyPage from './pages/BuyPage.jsx'
 import BoardPage from './pages/BoardPage.jsx'
@@ -79,13 +80,7 @@ export default function App() {
       <div className="shell" ref={shellRef}>
       <aside className="sidebar">
         <div className="brand" onClick={() => setPage('buy')}>
-          <span className="brand-logo">
-            <Cat size={22} strokeWidth={2.2} />
-          </span>
-          <div>
-            <div className="brand-name">หวยลุงแมว</div>
-            <div className="brand-sub">ระบบจดโพยหวยรัฐบาล</div>
-          </div>
+          <Logo variant="dark" />
         </div>
 
         <div className="side-event">
