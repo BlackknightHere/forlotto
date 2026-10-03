@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Coins, Hash, PenLine, Search, Settings2, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
-import { TYPES, TYPE_KEYS, breakdown, entriesOf, entryTotal, fmt, cellState, defaultLimit, getLimit, groupByNumber, numbersFor, ownLimit, tabSummary } from '../lib.js'
+import { TYPES, TYPE_KEYS, breakdown, entriesOf, entryTotal, fmt, cellState, getLimit, groupByNumber, numbersFor, tabSummary } from '../lib.js'
 import LimitModal from '../components/LimitModal.jsx'
 import NumberModal from '../components/NumberModal.jsx'
 import PayoutPanel from '../components/PayoutPanel.jsx'
@@ -114,11 +114,6 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
             เฉพาะเลขที่มีคนซื้อ
           </label>
           <div className="legend">
-            {defaultLimit(event, owner, type) !== null && (
-              <span className="legend-default">
-                อั้นทุกเลข <b>{fmt(defaultLimit(event, owner, type))}</b>
-              </span>
-            )}
             <span>
               <i className="l-near" />
               ใกล้เต็ม 80%
@@ -145,7 +140,6 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
             number={n}
             entries={groups[n]}
             limit={getLimit(event, owner, type, n)}
-            own={ownLimit(event, owner, type, n)}
             short={type === 'three'}
             found={search.length === (type === 'three' ? 3 : 2) && n === search}
             onClick={() => setOpenNumber(n)}
@@ -176,33 +170,42 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
 }
 
 // One number in the grid. Every cell reads the same way:
-//   [number] ............ [total]        or, with a per-number limit:  [number] [อั้น 500]
-//   [20+20+50 = 90]                                                    [400+20 = 420]
-// (the corner total gives way to the limit pill: the bottom line already ends in "= total")
+//   [number] ................ [total]
+//   [อั้น 500]
+//   [20+20+50 = 90]                 (a long sum is cut short: 50+5000+… = 45000)
+// The limit box shows on every number that has a limit (the all-numbers default included);
 // The state (near / full / over) is shown by the bar on the left; "over" also tints the cell.
-function Cell({ number, entries, limit, own, short, found, onClick }) {
+function Cell({ number, entries, limit, short, found, onClick }) {
   const list = entries || []
   const total = list.reduce((s, e) => s + entryTotal(e), 0)
   const state = cellState(total, limit)
   const tip = [sumTip(list, total), limit !== null ? `อั้น ${fmt(limit)}` : ''].filter(Boolean).join(' · ')
 
-  let pill = null
-  if (state === 'closed') pill = 'ปิดรับ'
-  else if (own !== null) pill = short ? fmt(own) : `อั้น ${fmt(own)}`
+  let box = null
+  if (state === 'closed') box = <span className="cell-limit">ปิดรับ</span>
+  else if (limit !== null)
+    box = (
+      <span className="cell-limit">
+        {!short && <span className="cell-limit-word">อั้น </span>}
+        {fmt(limit)}
+      </span>
+    )
 
   return (
     <button className={`cell s-${state} ${found ? 'found' : ''}`} onClick={onClick} title={tip}>
       <div className="cell-top">
         <span className="cell-num">{number}</span>
-        {pill && <span className="cell-limit">{pill}</span>}
-        {total > 0 && !pill && <span className="cell-total">{fmt(total)}</span>}
+        {total > 0 && <span className="cell-total">{fmt(total)}</span>}
       </div>
-      {list.length > 0 && (
-        <div className="cell-break">
-          <span className="cell-sum">{breakdown(list)}</span>
-          <b className="cell-eq">= {fmt(total)}</b>
-        </div>
-      )}
+      <div className="cell-limit-row">{box}</div>
+      <div className="cell-break">
+        {list.length > 0 && (
+          <>
+            <span className="cell-sum">{breakdown(list)}</span>
+            <b className="cell-eq">= {fmt(total)}</b>
+          </>
+        )}
+      </div>
     </button>
   )
 }
