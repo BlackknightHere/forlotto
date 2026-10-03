@@ -361,17 +361,29 @@ select {
 .grid-two, .grid-three { grid-template-columns: repeat(10, minmax(0, 1fr)); }
 .empty-grid { grid-column: 1 / -1; text-align: center; padding: 40px; background: var(--surface); }
 .cell {
-  display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0;
-  height: 76px; padding: 6px 10px; border: none; border-radius: 0; text-align: left;
-  container-type: inline-size;
+  display: block; min-width: 0; padding: 6px 10px; border: none; border-radius: 0; text-align: left;
   background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.1s;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; container-type: inline-size;
+}
+/* Narrow (default): number + total, limit box on its own line, then the sum. */
+.cell-in {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; row-gap: 2px;
+  grid-template-areas: 'num total' 'limit limit' 'sum sum'; grid-template-rows: 20px 18px 16px; min-width: 0;
+}
+.cell-num { grid-area: num; }
+.cell-limit-slot { grid-area: limit; display: flex; min-width: 0; }
+.cell-total { grid-area: total; justify-self: end; }
+.cell-in .cell-break { grid-area: sum; }
+/* Wide: the limit box sits right after the number, two lines per cell. */
+@container (min-width: 112px) {
+  .cell-in { grid-template-columns: auto minmax(0, auto) 1fr; grid-template-areas: 'num limit total' 'sum sum sum'; grid-template-rows: 24px 18px; row-gap: 6px; }
+  .cell-limit-slot { overflow: hidden; }
+  .cell-limit-slot .cell-limit { overflow: hidden; text-overflow: ellipsis; }
 }
 .cell:hover { background: var(--teal-soft); }
 .cell:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
-.cell-top { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
 .cell-num { font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
-.cell-total { margin-left: auto; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.cell-total { font-weight: 700; font-size: 15px; white-space: nowrap; }
 .cell-limit {
   flex-shrink: 0; white-space: nowrap;
   padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 17px;
@@ -395,11 +407,10 @@ select {
 .cell.found.s-full { box-shadow: inset 3px 0 0 var(--full), inset 0 0 0 2px var(--found); }
 .cell.found.s-over { box-shadow: inset 3px 0 0 var(--over), inset 0 0 0 2px var(--found); }
 
-.grid-three .cell { height: 68px; padding: 4px 8px; }
+.grid-three .cell { padding: 4px 8px; }
 .grid-three .cell-num { font-size: 14px; }
 .grid-three .cell-total { font-size: 13px; }
 .grid-three .cell-limit { padding: 0 4px; font-size: 10px; line-height: 15px; }
-.grid-three .cell-top { gap: 4px; }
 .grid-three .cell-break { font-size: 11px; }
 
 /* ---------- payout ---------- */
@@ -578,5 +589,3 @@ select {
 @container (max-width: 64px) {
   .cell-limit-word { display: none; }
 }
-.cell-limit-row { display: flex; min-height: 17px; }
-.cell-break { min-height: 16px; }

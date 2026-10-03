@@ -170,9 +170,10 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
 }
 
 // One number in the grid. Every cell reads the same way:
-//   [number] ................ [total]
-//   [อั้น 500]
-//   [20+20+50 = 90]                 (a long sum is cut short: 50+5000+… = 45000)
+//   wide cell:   [number] [อั้น 500] ...... [total]      narrow cell:  [number] ...... [total]
+//                [20+20+50 = 90]                                     [อั้น 500]
+//                                                                     [20+20+50 = 90]
+// (a long sum is cut short: 50+5000+… = 45000). Wide/narrow is decided in CSS with a container query.
 // The limit box shows on every number that has a limit (the all-numbers default included);
 // The state (near / full / over) is shown by the bar on the left; "over" also tints the cell.
 function Cell({ number, entries, limit, short, found, onClick }) {
@@ -193,18 +194,18 @@ function Cell({ number, entries, limit, short, found, onClick }) {
 
   return (
     <button className={`cell s-${state} ${found ? 'found' : ''}`} onClick={onClick} title={tip}>
-      <div className="cell-top">
+      <div className="cell-in">
         <span className="cell-num">{number}</span>
+        <span className="cell-limit-slot">{box}</span>
         {total > 0 && <span className="cell-total">{fmt(total)}</span>}
-      </div>
-      <div className="cell-limit-row">{box}</div>
-      <div className="cell-break">
-        {list.length > 0 && (
-          <>
-            <span className="cell-sum">{breakdown(list)}</span>
-            <b className="cell-eq">= {fmt(total)}</b>
-          </>
-        )}
+        <div className="cell-break">
+          {list.length > 0 && (
+            <>
+              <span className="cell-sum">{breakdown(list)}</span>
+              <b className="cell-eq">= {fmt(total)}</b>
+            </>
+          )}
+        </div>
       </div>
     </button>
   )

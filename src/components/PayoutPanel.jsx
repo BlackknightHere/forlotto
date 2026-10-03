@@ -72,7 +72,7 @@ export default function PayoutPanel({ data, update, event, owner, type }) {
               />
             </>
           ) : (
-            <PayLine label="ยอดซื้อ" bought={d?.bought} multValue={p.mult} onMult={(e) => set({ mult: mult(e) })} pay={current.payout} />
+            <PayLine label="ยอดจ่าย" bought={d?.bought} multValue={p.mult} onMult={(e) => set({ mult: mult(e) })} pay={current.payout} />
           )}
         </div>
         {!d && <p className="muted small">กรอกเลขที่ออกให้ครบ {isThree ? 3 : 2} หลัก ระบบจะดึงยอดซื้อมาให้</p>}
