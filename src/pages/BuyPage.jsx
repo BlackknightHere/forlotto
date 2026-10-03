@@ -23,36 +23,6 @@ export default function BuyPage({ data, update, event, toast }) {
   // New rows inherit the owner of the last row, since a run of numbers usually goes to the same person.
   const addRows = (n = 1) => setRows((rs) => [...rs, ...Array.from({ length: n }, () => blankRow(rs.at(-1)?.owner))])
 
-  // Enter jumps to the next input, so a whole ticket can be keyed without the mouse.
-  // Ctrl+Enter saves the ticket. ↑ / ↓ in a 2-digit row picks บน / ล่าง.
-  const ROW_FIELDS = '.ticket-row input:not([disabled]), .ticket-row select:not([disabled])'
-  const onKeyDown = (e) => {
-    const rowId = e.target.closest?.('.ticket-row')?.dataset.row
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && rowId && e.target.dataset.posKeys) {
-      const row = rows.find((r) => r.id === rowId)
-      if (row?.number.length === 2) {
-        e.preventDefault()
-        setRow(rowId, { pos: e.key === 'ArrowUp' ? 'top' : 'bottom' })
-      }
-      return
-    }
-    if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return
-    e.preventDefault()
-    if (e.ctrlKey) return submit()
-    const fields = [...formRef.current.querySelectorAll(ROW_FIELDS)]
-    const i = fields.indexOf(e.target)
-    if (i === -1) return
-    if (i === fields.length - 1) {
-      if (!rows.at(-1)?.number) return
-      addRows(1)
-    }
-    setTimeout(() => {
-      const next = formRef.current.querySelectorAll(ROW_FIELDS)[i + 1]
-      next?.focus()
-      next?.select?.()
-    }, 0)
-  }
-
   function validate() {
     const errs = {}
     const items = []
@@ -130,23 +100,11 @@ export default function BuyPage({ data, update, event, toast }) {
           <div className="eyebrow">{event.name}</div>
           <h1>ซื้อเลข</h1>
         </div>
-        <div className="kbd-hints">
-          <span>
-            <kbd>Enter</kbd> ไปช่องถัดไป
-          </span>
-          <span>
-            <kbd>Ctrl</kbd>+<kbd>Enter</kbd> ยืนยัน
-          </span>
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> บน / ล่าง
-          </span>
-        </div>
       </div>
 
       {event.archived && <ArchivedBar event={event} update={update} text="ดูข้อมูลได้ แต่บันทึก แก้ไข หรือลบโพยไม่ได้" />}
 
-      <div className="card ticket" ref={formRef} onKeyDown={onKeyDown}>
+      <div className="card ticket" ref={formRef}>
         <div className="card-head">
           <div className="card-title">
             <span className="card-title-icon">
@@ -171,14 +129,13 @@ export default function BuyPage({ data, update, event, toast }) {
         {rows.map((r, i) => {
           const len = r.number.length
           return (
-            <div key={r.id} data-row={r.id} className={`ticket-grid ticket-row ${errors[r.id] ? 'has-error' : ''} ${len ? 'filled' : ''}`}>
+            <div key={r.id} className={`ticket-grid ticket-row ${errors[r.id] ? 'has-error' : ''} ${len ? 'filled' : ''}`}>
               <span className="row-no">{i + 1}</span>
               <input
                 className="num-input"
                 inputMode="numeric"
                 maxLength={3}
                 placeholder="00"
-                data-pos-keys="1"
                 value={r.number}
                 onChange={(e) => setRow(r.id, { number: e.target.value.replace(/\D/g, '') })}
               />
@@ -196,8 +153,7 @@ export default function BuyPage({ data, update, event, toast }) {
               ) : (
                 <input
                   inputMode="decimal"
-                  data-pos-keys="1"
-                  placeholder={len === 2 ? '0' : 'ใส่เลขก่อน'}
+                    placeholder={len === 2 ? '0' : 'ใส่เลขก่อน'}
                   disabled={len !== 2}
                   value={r.amount}
                   onChange={(e) => setRow(r.id, { amount: money(e) })}
