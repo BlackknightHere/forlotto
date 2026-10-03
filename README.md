@@ -40,3 +40,4 @@ npm test         # unit test ของ src/lib.js (vitest)
 - `server/needs-build.js` — ให้ `2-open-app.bat` รู้ว่าต้อง `npm install` / build ใหม่หลังอัปเดตหรือไม่
 - `src/pages/` — หน้าซื้อเลข / ดูยอดรวม / งวดทั้งหมด
 - เปลี่ยนพอร์ตได้ด้วยตัวแปร `LOTTO_PORT`
+- `docs/handoff/` — เอกสาร QA / handoff สำหรับนักพัฒนา (ไม่ติดไปใน Download ZIP)

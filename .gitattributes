@@ -1,1 +1,5 @@
 *.bat text eol=crlf
+
+# Not needed by the app: left out of GitHub "Download ZIP"
+docs/ export-ignore
+.claude/ export-ignore
