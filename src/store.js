@@ -17,6 +17,8 @@ export function useDb() {
   const [data, setData] = useState(null)
   const [status, setStatusRaw] = useState('loading') // loading | saved | saving | error | conflict | locked
   const statusRef = useRef('loading')
+  // While locked: did this tab manage to save its last changes? saving | saved | failed
+  const [lockedSave, setLockedSave] = useState('saved')
   const version = useRef(0)
   const pending = useRef(null)
   const timer = useRef(null)
@@ -62,12 +64,14 @@ export function useDb() {
       version.current = (await r.json()).version
       failures.current = 0
       channel.current?.postMessage({ type: 'saved', version: version.current })
+      if (statusRef.current === 'locked' && !pending.current) setLockedSave('saved')
       setStatus(pending.current ? 'saving' : 'saved')
     } catch (err) {
       console.error(err)
       pending.current ??= body
       retryIn = RETRY_DELAYS[Math.min(failures.current, RETRY_DELAYS.length - 1)]
       failures.current++
+      if (statusRef.current === 'locked') setLockedSave('failed')
       setStatus('error')
     } finally {
       inFlight.current = false
@@ -90,6 +94,7 @@ export function useDb() {
         clearTimeout(timer.current)
         flush()
         setStatus('locked')
+        setLockedSave(pending.current || inFlight.current ? 'saving' : 'saved')
       } else if (msg?.type === 'saved' && msg.version > version.current) {
         // The other tab saved after we loaded (e.g. its last edits): pick them up if we have nothing unsaved.
         if (!pending.current && !inFlight.current && statusRef.current !== 'locked') load().catch(() => {})
@@ -99,9 +104,10 @@ export function useDb() {
     return () => ch.close()
   }, [load, flush, setStatus])
 
+  // Returns false (and changes nothing) while this tab is locked or in conflict, so callers must not report success.
   const update = useCallback(
     (fn) => {
-      if (statusRef.current === 'locked' || statusRef.current === 'conflict') return
+      if (statusRef.current === 'locked' || statusRef.current === 'conflict') return false
       setData((prev) => {
         const next = structuredClone(prev)
         fn(next)
@@ -110,6 +116,7 @@ export function useDb() {
         timer.current = setTimeout(flush, SAVE_DELAY)
         return next
       })
+      return true
     },
     [flush],
   )
@@ -131,5 +138,5 @@ export function useDb() {
     location.reload()
   }, [])
 
-  return { data, status, update, reload }
+  return { data, status, lockedSave, update, reload }
 }

@@ -4,7 +4,7 @@ import Modal from './Modal.jsx'
 import { useConfirm } from './Confirm.jsx'
 import { OWNERS, TYPES, cleanMoney, entryTotal, fmt, fmtTime, getLimit, sumThree, toNum } from '../lib.js'
 
-export default function NumberModal({ number, type, owner, event, entries, update, toast, onClose }) {
+export default function NumberModal({ number, type, owner, event, entries, update, toast, onClose, readOnly }) {
   const [editing, setEditing] = useState(null) // { id, amount, straight, tod, note }
   const confirm = useConfirm()
   const isThree = type === 'three'
@@ -21,7 +21,7 @@ export default function NumberModal({ number, type, owner, event, entries, updat
       ? { straight: toNum(editing.straight), tod: toNum(editing.tod), note: editing.note.trim() }
       : { amount: toNum(editing.amount), note: editing.note.trim() }
     if ((isThree ? patch.straight + patch.tod : patch.amount) <= 0) return toast('ยอดต้องมากกว่า 0 (ถ้าจะเอาออกให้กดลบ)', 'err')
-    update((d) => Object.assign(d.entries.find((x) => x.id === editing.id), patch, { editedAt: Date.now() }))
+    if (!update((d) => Object.assign(d.entries.find((x) => x.id === editing.id), patch, { editedAt: Date.now() }))) return
     setEditing(null)
     toast('แก้ไขแล้ว')
   }
@@ -35,7 +35,7 @@ export default function NumberModal({ number, type, owner, event, entries, updat
       danger: true,
     })
     if (!ok) return
-    update((d) => void (d.entries = d.entries.filter((x) => x.id !== e.id)))
+    if (!update((d) => void (d.entries = d.entries.filter((x) => x.id !== e.id)))) return
     toast(`ลบเลข ${number} ยอด ${fmt(entryTotal(e))} แล้ว`, 'ok', { label: 'เลิกทำ', run: () => update((d) => void d.entries.push(e)) })
   }
 
@@ -128,12 +128,16 @@ export default function NumberModal({ number, type, owner, event, entries, updat
                     {e.note || <span className="muted">—</span>}
                   </td>
                   <td className="actions">
-                    <button className="btn sm ghost" onClick={() => startEdit(e)}>
-                      <Pencil size={14} /> แก้ไข
-                    </button>
-                    <button className="btn sm danger" onClick={() => remove(e)}>
-                      <Trash2 size={14} /> ลบ
-                    </button>
+                    {!readOnly && (
+                      <>
+                        <button className="btn sm ghost" onClick={() => startEdit(e)}>
+                          <Pencil size={14} /> แก้ไข
+                        </button>
+                        <button className="btn sm danger" onClick={() => remove(e)}>
+                          <Trash2 size={14} /> ลบ
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ),

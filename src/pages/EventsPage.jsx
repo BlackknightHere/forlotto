@@ -36,26 +36,28 @@ export default function EventsPage({ data, update, event, toast, setCurrentEvent
     if (form.mode === 'create') {
       const source = data.events.find((e) => e.id === form.copyFrom)
       const ev = newEvent({ name, date: form.date, discount, limits: source?.limits })
-      update((d) => {
+      const ok = update((d) => {
         d.events.push(ev)
         d.settings.currentEventId = ev.id
       })
+      if (!ok) return
       toast(`สร้าง "${name}" แล้ว`)
       setForm(null)
       goBuy()
     } else {
-      update((d) => Object.assign(d.events.find((e) => e.id === form.id), { name, date: form.date, discount }))
+      if (!update((d) => Object.assign(d.events.find((e) => e.id === form.id), { name, date: form.date, discount }))) return
       toast('บันทึกแล้ว')
       setForm(null)
     }
   }
 
   const toggleArchive = (ev) => {
-    update((d) => {
+    const ok = update((d) => {
       const target = d.events.find((e) => e.id === ev.id)
       target.archived = !target.archived
       if (target.archived && d.settings.currentEventId === ev.id) d.settings.currentEventId = null
     })
+    if (!ok) return
     toast(ev.archived ? `นำ "${ev.name}" กลับมาแล้ว` : `จัดเก็บ "${ev.name}" แล้ว`)
   }
 
@@ -69,12 +71,12 @@ export default function EventsPage({ data, update, event, toast, setCurrentEvent
       danger: true,
     })
     if (!ok) return
-    update((d) => {
+    const done = update((d) => {
       d.events = d.events.filter((e) => e.id !== ev.id)
       d.entries = d.entries.filter((e) => e.eventId !== ev.id)
       if (d.settings.currentEventId === ev.id) d.settings.currentEventId = null
     })
-    toast('ลบแล้ว')
+    if (done) toast('ลบแล้ว')
   }
 
   return (

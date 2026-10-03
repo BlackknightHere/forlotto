@@ -5,6 +5,7 @@ import LimitModal from '../components/LimitModal.jsx'
 import NumberModal from '../components/NumberModal.jsx'
 import PayoutPanel from '../components/PayoutPanel.jsx'
 import OwnerSelect from '../components/OwnerSelect.jsx'
+import ArchivedBar from '../components/ArchivedBar.jsx'
 
 const THREE_PAGE_SIZE = 500
 const GRID_COLUMNS = 10
@@ -47,7 +48,7 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
         </div>
         <div className="head-actions">
           <OwnerSelect value={owner} onChange={setOwner} />
-          <button className="btn" onClick={() => setLimitOpen(true)}>
+          <button className="btn" onClick={() => setLimitOpen(true)} disabled={event.archived} title={event.archived ? 'งวดที่จัดเก็บแล้วแก้ยอดอั้นไม่ได้' : ''}>
             <Settings2 size={17} /> ตั้งยอดอั้น
           </button>
           <button className="btn primary" onClick={goBuy}>
@@ -55,6 +56,8 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
           </button>
         </div>
       </div>
+
+      {event.archived && <ArchivedBar event={event} update={update} text="แก้ไขโพยและยอดอั้นไม่ได้ แต่ยังกรอกเลขที่ออกและตัวคูณได้" />}
 
       <div className="stat-row">
         <StatCard icon={Coins} tone="brand" label={`ยอดซื้อ ${TYPES[type]}`} value={`${fmt(tabTotal)} ฿`} />
@@ -143,6 +146,7 @@ export default function BoardPage({ data, update, event, toast, owner, setOwner,
           type={type}
           owner={owner}
           event={event}
+          readOnly={event.archived}
           entries={groups[openNumber] || []}
           update={update}
           toast={toast}

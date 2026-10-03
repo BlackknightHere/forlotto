@@ -31,13 +31,14 @@ export default function LimitModal({ event, owner, type, update, toast, onClose 
 
   function save() {
     if (!valid) return
-    update((d) => {
+    const ok = update((d) => {
       const ev = d.events.find((e) => e.id === event.id)
       ev.limits[owner][type] = {
         default: all === '' ? null : Number(all),
         overrides: Object.fromEntries(filled.map((r) => [r.number, Number(r.limit)])),
       }
     })
+    if (!ok) return
     toast(`บันทึกยอดอั้น ${TYPES[type]} ของ${OWNERS[owner]}แล้ว`)
     onClose()
   }

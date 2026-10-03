@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { OWNERS, TYPES, allocateItems, cleanMoney, entryTotal, fmt, toNum, uid } from '../lib.js'
 import OverLimitModal from '../components/OverLimitModal.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
-import { ArchiveRestore, Check, Eraser, History, Plus, Receipt, Trash2, X } from 'lucide-react'
+import ArchivedBar from '../components/ArchivedBar.jsx'
+import { Check, Eraser, History, Plus, Receipt, Trash2, X } from 'lucide-react'
 
 const DEFAULT_ROWS = 5
 const blankRow = (owner = 'meaw') => ({ id: uid(), number: '', amount: '', pos: 'top', straight: '', tod: '', note: '', owner })
@@ -105,7 +106,7 @@ export default function BuyPage({ data, update, event, toast }) {
       const now = Date.now()
       const batchId = uid()
       const created = result.created.map((it) => makeEntry(it, event.id, batchId, now))
-      update((d) => void d.entries.push(...created))
+      if (!update((d) => void d.entries.push(...created))) return
       const sent = created.filter((c) => c.cutFrom).reduce((s, c) => s + entryTotal(c), 0)
       let msg = `บันทึกแล้ว ${created.length} รายการ`
       if (sent) msg += ` · ตัดส่งป้าจิก ${fmt(sent)} บาท`
@@ -143,17 +144,7 @@ export default function BuyPage({ data, update, event, toast }) {
         </div>
       </div>
 
-      {event.archived && (
-        <div className="archived-bar">
-          <ArchiveRestore size={20} />
-          <div>
-            <b>งวดนี้จัดเก็บแล้ว</b> — ดูข้อมูลได้ แต่บันทึกโพยใหม่ไม่ได้
-          </div>
-          <button className="btn sm" onClick={() => update((d) => void (d.events.find((e) => e.id === event.id).archived = false))}>
-            นำกลับมาใช้งาน
-          </button>
-        </div>
-      )}
+      {event.archived && <ArchivedBar event={event} update={update} text="ดูข้อมูลได้ แต่บันทึก แก้ไข หรือลบโพยไม่ได้" />}
 
       <div className="card ticket" ref={formRef} onKeyDown={onKeyDown}>
         <div className="card-head">
@@ -290,7 +281,7 @@ function RecentEntries({ data, event, update, toast }) {
       danger: true,
     })
     if (!ok) return
-    update((d) => void (d.entries = d.entries.filter((x) => x.id !== e.id)))
+    if (!update((d) => void (d.entries = d.entries.filter((x) => x.id !== e.id)))) return
     toast(`ลบเลข ${e.number} แล้ว`, 'ok', { label: 'เลิกทำ', run: () => update((d) => void d.entries.push(e)) })
   }
 
@@ -335,9 +326,11 @@ function RecentEntries({ data, event, update, toast }) {
               </td>
               <td className="muted">{e.note}</td>
               <td className="actions">
-                <button className="icon-btn danger" onClick={() => remove(e)} title="ลบรายการนี้">
-                  <Trash2 size={16} />
-                </button>
+                {!event.archived && (
+                  <button className="icon-btn danger" onClick={() => remove(e)} title="ลบรายการนี้">
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </td>
             </tr>
           ))}

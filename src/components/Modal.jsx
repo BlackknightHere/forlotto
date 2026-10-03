@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect } from 'react'
 
-// onDismiss (Esc / click outside) defaults to onClose; pass it to intercept, e.g. to cancel an edit or ask first.
+// onDismiss (Esc / click outside / X button) defaults to onClose; pass it to intercept, e.g. to cancel an edit or ask first.
 export default function Modal({ title, onClose, onDismiss = onClose, children, footer, width = 560, dismissable = true }) {
   useEffect(() => {
     if (!dismissable) return
@@ -16,7 +16,7 @@ export default function Modal({ title, onClose, onDismiss = onClose, children, f
         <div className="modal-head">
           <h2>{title}</h2>
           {dismissable && (
-            <button className="icon-btn" onClick={onClose} aria-label="ปิด">
+            <button className="icon-btn" onClick={onDismiss} aria-label="ปิด">
               <X size={18} />
             </button>
           )}

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppWindow, CalendarDays, CalendarPlus, Cat, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useDb } from './store.js'
 import { fmtDate } from './lib.js'
@@ -22,7 +22,19 @@ const STATUS = {
 }
 
 export default function App() {
-  const { data, status, update, reload } = useDb()
+  const { data, status, lockedSave, update, reload } = useDb()
+  const shellRef = useRef(null)
+  const blocked = status === 'locked' || status === 'conflict'
+
+  // Under the blocking notice nothing may be typed or clicked: drop focus and make the app inert.
+  useEffect(() => {
+    const shell = shellRef.current
+    if (!shell) return
+    if (blocked) {
+      document.activeElement?.blur()
+      shell.setAttribute('inert', '')
+    } else shell.removeAttribute('inert')
+  }, [blocked, data])
   const [page, setPage] = useState('buy')
   const [boardOwner, setBoardOwner] = useState('meaw')
   const [startCreate, setStartCreate] = useState(false)
@@ -36,6 +48,13 @@ export default function App() {
   }, [])
   const dismissToast = (id) => setToasts((t) => t.filter((x) => x.id !== id))
 
+  // Every page goes through this, so a refused save is never reported as success.
+  const guardedUpdate = (fn) => {
+    const ok = update(fn)
+    if (!ok) toast(status === 'conflict' ? 'บันทึกไม่ได้ — ต้องโหลดข้อมูลล่าสุดก่อน' : 'บันทึกไม่ได้ — แอปถูกเปิดอยู่ในหน้าต่างอื่น', 'err')
+    return ok
+  }
+
   if (!data) {
     return (
       <div className="center-screen">
@@ -46,17 +65,18 @@ export default function App() {
 
   const activeEvents = data.events.filter((e) => !e.archived).sort((a, b) => b.date.localeCompare(a.date))
   const event = data.events.find((e) => e.id === data.settings.currentEventId) || activeEvents[0] || null
-  const setCurrentEvent = (id) => update((d) => void (d.settings.currentEventId = id))
+  const setCurrentEvent = (id) => guardedUpdate((d) => void (d.settings.currentEventId = id))
   const createEvent = () => {
     setStartCreate(true)
     setPage('events')
   }
 
-  const ctx = { data, update, event, toast }
+  const ctx = { data, update: guardedUpdate, event, toast }
   const St = STATUS[status]
 
   return (
-    <div className="shell">
+    <>
+      <div className="shell" ref={shellRef}>
       <aside className="sidebar">
         <div className="brand" onClick={() => setPage('buy')}>
           <span className="brand-logo">
@@ -141,26 +161,6 @@ export default function App() {
         )}
       </main>
 
-      {status === 'locked' && (
-        <BlockingNotice
-          icon={AppWindow}
-          title="แอปถูกเปิดอยู่ในหน้าต่างอื่น"
-          message="เพื่อไม่ให้ข้อมูลหายหรือซ้ำ ใช้งานได้ทีละหน้าต่างเท่านั้น ข้อมูลในหน้านี้บันทึกไว้เรียบร้อยแล้ว กรุณาใช้หน้าต่างที่เปิดล่าสุด"
-          action="ใช้งานหน้านี้แทน"
-          onAction={reload}
-        />
-      )}
-      {status === 'conflict' && (
-        <BlockingNotice
-          danger
-          icon={TriangleAlert}
-          title="บันทึกรายการล่าสุดไม่ได้"
-          message="ข้อมูลถูกแก้ไขจากหน้าต่างอื่น รายการที่เพิ่งคีย์ในหน้านี้ (หลังจากบันทึกครั้งล่าสุด) ยังไม่ถูกบันทึก กดปุ่มด้านล่างเพื่อโหลดข้อมูลล่าสุด แล้วตรวจดูในรายการล่าสุดว่าต้องคีย์อะไรใหม่บ้าง"
-          action="โหลดข้อมูลล่าสุด"
-          onAction={reload}
-        />
-      )}
-
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast t-${t.kind}`}>
@@ -180,11 +180,39 @@ export default function App() {
           </div>
         ))}
       </div>
-    </div>
+      </div>
+
+      {status === 'locked' && (
+        <BlockingNotice
+          icon={AppWindow}
+          title="แอปถูกเปิดอยู่ในหน้าต่างอื่น"
+          message={LOCKED_MESSAGE[lockedSave]}
+          action="ใช้งานหน้านี้แทน"
+          busy={lockedSave !== 'saved'}
+          onAction={reload}
+        />
+      )}
+      {status === 'conflict' && (
+        <BlockingNotice
+          danger
+          icon={TriangleAlert}
+          title="บันทึกรายการล่าสุดไม่ได้"
+          message="ข้อมูลถูกแก้ไขจากหน้าต่างอื่น รายการที่เพิ่งคีย์ในหน้านี้ (หลังจากบันทึกครั้งล่าสุด) ยังไม่ถูกบันทึก กดปุ่มด้านล่างเพื่อโหลดข้อมูลล่าสุด แล้วตรวจดูในรายการล่าสุดว่าต้องคีย์อะไรใหม่บ้าง"
+          action="โหลดข้อมูลล่าสุด"
+          onAction={reload}
+        />
+      )}
+    </>
   )
 }
 
-function BlockingNotice({ icon: Icon, title, message, action, onAction, danger }) {
+const LOCKED_MESSAGE = {
+  saving: 'เพื่อไม่ให้ข้อมูลหายหรือซ้ำ ใช้งานได้ทีละหน้าต่างเท่านั้น กำลังบันทึกข้อมูลล่าสุดของหน้านี้… กรุณารอสักครู่',
+  saved: 'เพื่อไม่ให้ข้อมูลหายหรือซ้ำ ใช้งานได้ทีละหน้าต่างเท่านั้น ข้อมูลในหน้านี้บันทึกไว้เรียบร้อยแล้ว กรุณาใช้หน้าต่างที่เปิดล่าสุด',
+  failed: 'บันทึกข้อมูลล่าสุดของหน้านี้ไม่สำเร็จ ระบบกำลังลองใหม่อัตโนมัติ — อย่าเพิ่งปิดหน้านี้ และตรวจว่าหน้าต่างสีดำ (2-open-app) ยังเปิดอยู่',
+}
+
+function BlockingNotice({ icon: Icon, title, message, action, onAction, danger, busy }) {
   return (
     <div className="modal-backdrop confirm-backdrop blocking">
       <div className="confirm" role="alertdialog" aria-modal="true">
@@ -193,7 +221,14 @@ function BlockingNotice({ icon: Icon, title, message, action, onAction, danger }
         </div>
         <h2>{title}</h2>
         <p className="confirm-msg">{message}</p>
-        <button className={`btn lg block ${danger ? 'danger-solid' : 'primary'}`} style={{ marginTop: 22 }} onClick={onAction}>
+        <button
+          autoFocus
+          className={`btn lg block ${danger ? 'danger-solid' : 'primary'}`}
+          style={{ marginTop: 22 }}
+          disabled={busy}
+          onClick={onAction}
+        >
+          {busy ? <Loader size={18} className="spin" /> : null}
           {action}
         </button>
       </div>

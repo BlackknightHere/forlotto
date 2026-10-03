@@ -99,9 +99,19 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   if (process.argv.includes('--open')) openBrowser()
 })
 
-server.on('error', (err) => {
+server.on('error', async (err) => {
   if (err.code !== 'EADDRINUSE') throw err
-  // Already running (e.g. 2-open-app.bat double-clicked twice): just show the existing app.
+  // Port taken: if it is this app already running (2-open-app.bat double-clicked twice), just show it.
+  let ours = false
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/db`, { signal: AbortSignal.timeout(3000) })
+    ours = typeof (await r.json())?.version === 'number'
+  } catch {}
+  if (!ours) {
+    console.error(`\n  [!] เปิดโปรแกรมไม่ได้: พอร์ต ${PORT} ถูกโปรแกรมอื่นใช้อยู่`)
+    console.error('  ให้ปิดโปรแกรมนั้นก่อน หรือตั้งค่า LOTTO_PORT เป็นพอร์ตอื่น (เช่น set LOTTO_PORT=5179)\n')
+    process.exit(1)
+  }
   console.log(`\n  โปรแกรมเปิดอยู่แล้ว กำลังเปิดหน้าเดิมให้ที่ ${url}`)
   console.log('  หน้าต่างนี้จะปิดเองใน 5 วินาที\n')
   if (process.argv.includes('--open')) openBrowser()
