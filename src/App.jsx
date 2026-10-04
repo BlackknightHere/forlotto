@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppWindow, CalendarDays, CalendarPlus, CircleCheck, CloudOff, LayoutGrid, Loader, PenLine, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useDb } from './store.js'
 import Logo from './components/Logo.jsx'
+import ReceiptPanel from './components/ReceiptPanel.jsx'
 import { fmtDate } from './lib.js'
 import BuyPage from './pages/BuyPage.jsx'
 import BoardPage from './pages/BoardPage.jsx'
@@ -40,6 +41,7 @@ export default function App() {
   const [boardOwner, setBoardOwner] = useState('meaw')
   const [startCreate, setStartCreate] = useState(false)
   const [toasts, setToasts] = useState([])
+  const [receipt, setReceipt] = useState(null) // last saved ticket, shown bottom-right until closed
 
   // action: optional { label, run } button shown in the toast, e.g. "เลิกทำ" after a delete
   const toast = useCallback((text, kind = 'ok', action = null) => {
@@ -72,7 +74,7 @@ export default function App() {
     setPage('events')
   }
 
-  const ctx = { data, update: guardedUpdate, event, toast }
+  const ctx = { data, update: guardedUpdate, event, toast, showReceipt: setReceipt }
   const St = STATUS[status]
 
   return (
@@ -174,6 +176,7 @@ export default function App() {
             )}
           </div>
         ))}
+        {receipt && <ReceiptPanel key={receipt.batchId} receipt={receipt} update={guardedUpdate} toast={toast} onClose={() => setReceipt(null)} />}
       </div>
       </div>
 

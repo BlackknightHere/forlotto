@@ -10,7 +10,7 @@ const blankRow = (owner = 'meaw') => ({ id: uid(), number: '', amount: '', pos: 
 const blankRows = () => Array.from({ length: DEFAULT_ROWS }, () => blankRow())
 const isBlank = (r) => !r.number && !r.amount && !r.straight && !r.tod && !r.note.trim()
 
-export default function BuyPage({ data, update, event, toast }) {
+export default function BuyPage({ data, update, event, toast, showReceipt }) {
   const [rows, setRows] = useState(blankRows)
   const [errors, setErrors] = useState({})
   const [overLimit, setOverLimit] = useState(null) // { info, resolve }
@@ -77,11 +77,7 @@ export default function BuyPage({ data, update, event, toast }) {
       const batchId = uid()
       const created = result.created.map((it) => makeEntry(it, event.id, batchId, now))
       if (!update((d) => void d.entries.push(...created))) return
-      const sent = created.filter((c) => c.cutFrom).reduce((s, c) => s + entryTotal(c), 0)
-      let msg = `บันทึกแล้ว ${created.length} รายการ`
-      if (sent) msg += ` · ตัดส่งป้าจิก ${fmt(sent)} บาท`
-      if (result.rejected) msg += ` · ไม่รับ ${fmt(result.rejected)} บาท`
-      toast(msg)
+      showReceipt({ batchId, savedAt: now, entries: created, rejected: result.rejected })
       setRows(blankRows())
       setErrors({})
       setTimeout(() => formRef.current?.querySelector('input')?.focus(), 0)
