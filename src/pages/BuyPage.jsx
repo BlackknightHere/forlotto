@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { OWNERS, TYPES, allocateItems, cleanMoney, entryTotal, fmt, toNum, uid } from '../lib.js'
+import { OWNERS, TYPES, allocateItems, cleanMoney, entryTotal, fmt, parseReverse, permutations, toNum, uid } from '../lib.js'
 import OverLimitModal from '../components/OverLimitModal.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import ArchivedBar from '../components/ArchivedBar.jsx'
@@ -41,6 +41,14 @@ export default function BuyPage({ data, update, event, toast, showReceipt }) {
         else items.push({ type: r.pos, number: r.number, amount, owner: r.owner, note: r.note.trim() })
       } else {
         const straight = toNum(r.straight)
+        const rev = reverseOf(r)
+        if (rev) {
+          // "กลับ": every ordering of the digits is bought ตรง at the same price.
+          if (rev.error) errs[r.id] = rev.error
+          else if (!straight) errs[r.id] = 'ใส่ราคาช่องตรง (เลขละกี่บาท)'
+          else for (const n of rev.numbers) items.push({ type: 'three', number: n, straight, tod: 0, owner: r.owner, note: r.note.trim(), reverseOf: r.number })
+          continue
+        }
         const tod = toNum(r.tod)
         if (!straight && !tod) errs[r.id] = 'ใส่ยอดตรงหรือโต๊ด'
         else items.push({ type: 'three', number: r.number, straight, tod, owner: r.owner, note: r.note.trim() })
@@ -109,7 +117,7 @@ export default function BuyPage({ data, update, event, toast, showReceipt }) {
             โพยใบใหม่
             {filled > 0 && <span className="pill">{filled} เลข</span>}
           </div>
-          <span className="muted small">พิมพ์ 2 หลัก = เลือกบน/ล่าง · พิมพ์ 3 หลัก = ใส่ตรง/โต๊ด</span>
+          <span className="muted small">พิมพ์ 2 หลัก = เลือกบน/ล่าง · พิมพ์ 3 หลัก = ใส่ตรง/โต๊ด · ช่องโต๊ดใส่ 3x / 6x = ซื้อกลับ</span>
         </div>
 
         <div className="ticket-grid ticket-header">
@@ -143,7 +151,7 @@ export default function BuyPage({ data, update, event, toast, showReceipt }) {
                   </label>
                   <label className="affix">
                     <span>โต๊ด</span>
-                    <input inputMode="decimal" placeholder="0" value={r.tod} onChange={(e) => setRow(r.id, { tod: money(e) })} />
+                    <input placeholder="0 / 3x / 6x" value={r.tod} onChange={(e) => setRow(r.id, { tod: todInput(e) })} title="ใส่ 3x หรือ 6x = ซื้อกลับ" />
                   </label>
                 </div>
               ) : (
@@ -179,6 +187,7 @@ export default function BuyPage({ data, update, event, toast, showReceipt }) {
                 <X size={16} />
               </button>
               {errors[r.id] && <span className="row-error">{errors[r.id]}</span>}
+              {!errors[r.id] && <ReverseHint row={r} />}
             </div>
           )
         })}
@@ -270,7 +279,10 @@ function RecentEntries({ data, event, update, toast }) {
             <tr key={e.id}>
               <td className="muted">{new Date(e.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
               <td className="mono strong">{e.number}</td>
-              <td>{TYPES[e.type]}</td>
+              <td>
+                {TYPES[e.type]}
+                {e.reverseOf && <span className="cut-tag">กลับ {e.reverseOf}</span>}
+              </td>
               <td className="r mono">{fmt(entryTotal(e))}</td>
               <td>
                 <span className={`owner-tag o-${e.owner}`}>{OWNERS[e.owner]}</span>
@@ -294,8 +306,44 @@ function RecentEntries({ data, event, update, toast }) {
 
 const money = (e) => cleanMoney(e.target.value)
 
+// The โต๊ด box takes money, or a กลับ marker while it is being typed ('3', '6', '3x', '6x'; ป = x on a Thai keyboard).
+function todInput(e) {
+  const v = e.target.value.replace(/\s/g, '')
+  if (/^[36][xX×*ป]$/.test(v)) return v[0] + 'x'
+  return cleanMoney(v)
+}
+
+/** For a 3-digit row with a 3x / 6x marker: the numbers to buy, or why the marker doesn't fit this number. */
+function reverseOf(r) {
+  const want = parseReverse(r.tod)
+  if (!want || r.number.length !== 3) return null
+  const numbers = permutations(r.number)
+  if (numbers.length === 1) return { error: `เลข ${r.number} เป็นเลขตอง ซื้อกลับไม่ได้` }
+  if (numbers.length !== want) return { error: `เลข ${r.number} กลับได้ ${numbers.length} แบบ ให้ใส่ ${numbers.length}x` }
+  return { numbers }
+}
+
+function ReverseHint({ row }) {
+  const rev = reverseOf(row)
+  if (!rev) return null
+  if (rev.error) return <span className="row-error">{rev.error}</span>
+  const price = toNum(row.straight)
+  return (
+    <span className="row-hint">
+      {rev.numbers.length} กลับ: <b>{rev.numbers.join('  ')}</b>
+      {price > 0 && (
+        <>
+          {' '}
+          · เลขละ {fmt(price)} × {rev.numbers.length} = <b>{fmt(price * rev.numbers.length)} บาท</b>
+        </>
+      )}
+    </span>
+  )
+}
+
 function makeEntry(it, eventId, batchId, now) {
   const base = { id: uid(), eventId, batchId, owner: it.owner, type: it.type, number: it.number, note: it.note, cutFrom: it.cutFrom, createdAt: now }
+  if (it.reverseOf) base.reverseOf = it.reverseOf
   return it.type === 'three' ? { ...base, straight: it.straight || 0, tod: it.tod || 0 } : { ...base, amount: it.amount }
 }
 

@@ -5,6 +5,18 @@ import { useConfirm } from './Confirm.jsx'
 
 const TYPE_SHORT = { top: 'บน', bottom: 'ล่าง', three: '3 ตัว' }
 
+// A กลับ set is saved as one ตรง entry per ordering; show it as a single line when the parts match.
+function groupRows(entries) {
+  const rows = []
+  for (const e of entries) {
+    const last = rows.at(-1)
+    if (e.reverseOf && last?.reverseOf === e.reverseOf && last.owner === e.owner && last.cutFrom === e.cutFrom && last.straight === e.straight) {
+      last.numbers.push(e.number)
+    } else rows.push({ ...e, numbers: [e.number] })
+  }
+  return rows
+}
+
 /**
  * Bottom-right summary of the ticket that was just saved. It stays until closed (so it can be checked
  * at reading pace); saving the next ticket replaces it, so there is never more than one.
@@ -68,12 +80,16 @@ export default function ReceiptPanel({ receipt, update, toast, onClose }) {
       {!collapsed && (
         <>
           <ul className="receipt-list">
-        {entries.map((e) => (
+        {groupRows(entries).map((e) => (
           <li key={e.id} className={e.cutFrom ? 'cut' : ''}>
-            <span className="receipt-num">{e.number}</span>
-            <span className={`receipt-type t-${e.type}`}>{TYPE_SHORT[e.type]}</span>
+            <span className="receipt-num">{e.numbers.length > 1 ? e.reverseOf : e.number}</span>
+            <span className={`receipt-type t-${e.type}`}>{e.numbers.length > 1 ? `${e.numbers.length} กลับ` : TYPE_SHORT[e.type]}</span>
             <span className="receipt-amount">
-              {e.type === 'three' ? (
+              {e.numbers.length > 1 ? (
+                <>
+                  ตรง {fmt(e.straight)} × {e.numbers.length} = {fmt(e.straight * e.numbers.length)}
+                </>
+              ) : e.type === 'three' ? (
                 <>
                   {e.straight > 0 && <>ตรง {fmt(e.straight)}</>}
                   {e.straight > 0 && e.tod > 0 && ' · '}
@@ -84,6 +100,7 @@ export default function ReceiptPanel({ receipt, update, toast, onClose }) {
               )}
             </span>
             <span className={`owner-tag o-${e.owner}`}>{e.cutFrom ? 'ตัดส่งป้าจิก' : OWNERS[e.owner]}</span>
+            {e.numbers.length > 1 && <span className="receipt-note">{e.numbers.join(' ')}</span>}
             {e.note && <span className="receipt-note">{e.note}</span>}
           </li>
         ))}

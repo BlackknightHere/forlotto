@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocateItems, cellState, cleanMoney, defaultLimit, getLimit, ownLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
+import { allocateItems, cellState, parseReverse, permutations, cleanMoney, defaultLimit, getLimit, ownLimit, migrateData, newEvent, tabSummary, winningEntries } from './lib.js'
 
 const makeEvent = (patch = {}) => Object.assign(newEvent({ name: 'test', date: '2026-10-16' }), patch)
 const entry = (p) => ({ id: Math.random().toString(36), eventId: 'E', owner: 'meaw', note: '', createdAt: 0, ...p })
@@ -185,5 +185,20 @@ describe('cellState', () => {
     [700, 500, 'over'],
   ])('total %s with limit %s is %s', (total, limit, expected) => {
     expect(cellState(total, limit)).toBe(expected)
+  })
+})
+
+describe('กลับ (reverse)', () => {
+  it('6 กลับ for three different digits', () => expect(permutations('123')).toEqual(['123', '132', '213', '231', '312', '321']))
+  it('3 กลับ when one digit repeats', () => expect(permutations('112')).toEqual(['112', '121', '211']))
+  it('no reverse for a triple', () => expect(permutations('777')).toEqual(['777']))
+  it('reads 3x / 6x markers', () => {
+    expect(parseReverse('6x')).toBe(6)
+    expect(parseReverse(' 3X ')).toBe(3)
+    expect(parseReverse('6ป')).toBe(6)
+    expect(parseReverse('3*')).toBe(3)
+    expect(parseReverse('50')).toBeNull()
+    expect(parseReverse('4x')).toBeNull()
+    expect(parseReverse('')).toBeNull()
   })
 })

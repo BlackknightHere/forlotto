@@ -11,6 +11,23 @@ export const numbersFor = (type) =>
   type === 'three' ? Array.from({ length: 1000 }, (_, i) => pad(i, 3)) : Array.from({ length: 100 }, (_, i) => pad(i, 2))
 
 export const sortDigits = (n) => n.split('').sort().join('')
+
+/** Distinct orderings of a number's digits, sorted: '123' -> 6 numbers, '112' -> 3, '111' -> 1. */
+export function permutations(number) {
+  const out = new Set()
+  const walk = (rest, acc) => {
+    if (!rest) return out.add(acc)
+    for (let i = 0; i < rest.length; i++) walk(rest.slice(0, i) + rest.slice(i + 1), acc + rest[i])
+  }
+  walk(number, '')
+  return [...out].sort()
+}
+
+/** "กลับ" marker typed in the โต๊ด box: '3x' / '6x' (also X, ×, *, or ป = the x key on a Thai keyboard). */
+export function parseReverse(value) {
+  const m = String(value ?? '').trim().match(/^([36])\s*[xX×*ป]$/)
+  return m ? Number(m[1]) : null
+}
 export const toNum = (v) => {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : 0
